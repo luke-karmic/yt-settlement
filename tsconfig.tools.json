@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "paths": {
+      "@/*": ["src/*"],
+      "@tools/*": ["tools/*"]
+    }
+  },
+  "include": ["tools/**/*", "src/schemas/**/*"]
+}

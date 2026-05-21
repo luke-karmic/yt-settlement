@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: yeet
+          POSTGRES_PASSWORD: yeet
+          POSTGRES_DB: yeet_dev
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Create test and load databases
+        env:
+          PGPASSWORD: yeet
+        run: |
+          psql -h localhost -p 5433 -U yeet -d yeet_dev -c "CREATE DATABASE yeet_test;"
+          psql -h localhost -p 5433 -U yeet -d yeet_dev -c "GRANT ALL PRIVILEGES ON DATABASE yeet_test TO yeet;"
+
+      - name: Migrate dev + test DBs
+        run: |
+          DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_dev pnpm db:migrate
+          DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_test pnpm db:migrate
+
+      - name: Seed dev DB
+        run: DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_dev pnpm db:seed
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Integration tests
+        env:
+          DATABASE_URL: postgres://yeet:yeet@localhost:5433/yeet_test
+        run: pnpm test:integration
+
+      - name: Acceptance tests
+        env:
+          DATABASE_URL: postgres://yeet:yeet@localhost:5433/yeet_test
+        run: pnpm test:acceptance

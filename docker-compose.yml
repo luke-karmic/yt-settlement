@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: yeet
+      POSTGRES_PASSWORD: yeet
+      POSTGRES_DB: yeet_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yeet -d yeet_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DATABASE_URL: "postgres://yeet:yeet@postgres:5432/yeet_dev"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: yeet
+      DB_PASSWORD: yeet
+      DB_NAME: yeet_dev
+      POOL_MODE: session
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+      AUTH_TYPE: plain
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://yeet:yeet@pgbouncer:5432/yeet_dev
+      HMAC_SECRET: test
+      PORT: 3000
+      NODE_ENV: production
+      SKIP_K6_MANIFEST: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

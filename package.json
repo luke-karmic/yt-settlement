@@ -1,0 +1,53 @@
+{
+  "name": "yeet-settlement",
+  "version": "1.0.0",
+  "description": "Yeet Casino settlement engine",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc && tsc-alias -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "bootstrap": "docker compose up -d --wait postgres && pnpm db:migrate && pnpm db:seed",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:acceptance": "vitest run tests/acceptance",
+    "test:all": "vitest run",
+    "simulate:events": "tsx --tsconfig tsconfig.tools.json tools/event-simulator.ts",
+    "simulate:rtp": "tsx --tsconfig tsconfig.tools.json tools/rtp-game-runner.ts",
+    "load:k6": "k6 run k6/process-load.js",
+    "load:k6:docker": "docker run --rm -v \"$(pwd)/k6:/scripts\" -e API_URL=${API_URL:-http://host.docker.internal:3000} -e HMAC_SECRET=${HMAC_SECRET:-test} grafana/k6:latest run /scripts/process-load.js",
+    "lint": "eslint src tests tools",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.0",
+    "fastify": "^5.3.3",
+    "fastify-plugin": "^5.0.1",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "postgres": "^3.4.5",
+    "ulid": "^2.3.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.17"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/uuid": "^10.0.0",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.0",
+    "eslint": "^9.27.0",
+    "fast-check": "^4.1.1",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.4",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.1"
+  }
+}
