@@ -215,6 +215,33 @@ pnpm load:k6:docker
 
 Thresholds: p95 < 500ms, error rate < 5%. Optional: `K6_WALLETS=20` when seeding (default 20 ULID wallets plus acceptance wallet).
 
+### Results (Docker Compose stack, MacBook Pro M3, 2025-05-22)
+
+| Metric | Value | Threshold |
+|--------|-------|-----------|
+| Total requests | 18,649 | — |
+| Throughput | **310 req/s** | — |
+| `http_req_duration` p95 | **15.72 ms** | < 500 ms ✅ |
+| `http_req_duration` avg | 8.37 ms | — |
+| `http_req_duration` max | 75.52 ms | — |
+| Error rate | **0.00%** | < 5% ✅ |
+| Checks passed | 18,647 / 18,647 (100%) | — |
+
+**Scenarios (60 s total):**
+
+| Scenario | VUs | Duration | Iterations |
+|----------|-----|----------|------------|
+| `balance` — balance-only lookup | 10 constant | 30 s | ~3,100 |
+| `bet_win` — atomic bet+win | 0 → 20 → 50 → 0 ramping | 60 s | ~15,550 |
+
+**Custom bet latency metric** (client-side, includes network round-trip):
+
+| avg | med | p90 | p95 | max |
+|-----|-----|-----|-----|-----|
+| 9.4 ms | 8 ms | 14 ms | 16 ms | 62 ms |
+
+All HMAC-signed `process` calls. Bet+win batches run atomically (single DB transaction with row-level wallet lock). p95 is **32× under** the 500 ms threshold.
+
 ## Scale Design (Billions of Rows)
 
 | Concern | Mechanism |
