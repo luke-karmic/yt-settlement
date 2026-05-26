@@ -196,26 +196,47 @@ Tolerance: ±2% (at 10,000 rounds; ±1% at 100,000+ rounds).
 
 ## k6 Load Test
 
-Matches take-home performance expectations: HMAC-signed `process` calls, balance-only traffic, and atomic bet+win batches.
+HMAC-signed `process` traffic: balance-only lookups and atomic bet+win batches. Two profiles in `k6/process-load.js`:
+
+| Profile | Command | Purpose |
+|---------|---------|---------|
+| **smoke** (default) | `pnpm load:k6` | Low VUs + `sleep(0.1)` — quick regression on laptop/CI |
+| **burst** | `pnpm load:k6:burst` | **250 req/s** open-model arrival rate — capacity / pool-sizing signal |
 
 ```bash
 # Postgres + API (local dev or full compose)
 docker compose up -d postgres
 DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_dev pnpm db:migrate
-DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_dev pnpm db:seed   # writes k6/wallets.json (21 funded wallets)
+
+# Smoke: ~21 wallets (default K6_WALLETS=20 + acceptance wallet)
+DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_dev pnpm db:seed
 pnpm dev   # or: docker compose up -d
 
+# Burst: spread load across many wallets (avoids fake hot-wallet contention)
+K6_WALLETS=500 DATABASE_URL=postgres://yeet:yeet@localhost:5433/yeet_dev pnpm db:seed
+
 # k6 (install https://k6.io or use Docker)
-pnpm load:k6
+pnpm load:k6              # smoke
+pnpm load:k6:burst        # burst @ 250 iters/s for 3m (no sleep between iterations)
+
 # Docker if k6 is not installed locally:
 pnpm load:k6:docker
+API_URL=http://host.docker.internal:3001 pnpm load:k6:burst:docker
 ```
 
-`setup()` checks `/health`, probes balance on a seeded wallet, and fails fast if `k6/wallets.json` is missing.
+`setup()` checks `/health`, probes balance on a seeded wallet, and fails fast if `k6/wallets.json` is missing. Burst requires at least **100** wallets (default check); use **500+** for realistic spread.
 
-Thresholds: p95 < 500ms, error rate < 5%. Optional: `K6_WALLETS=20` when seeding (default 20 ULID wallets plus acceptance wallet).
+Thresholds (both profiles): p95 < 500 ms, error rate < 5%.
 
-### Results (Docker Compose stack, MacBook Pro M3, 2025-05-22)
+Environment overrides: `K6_BURST_RPS`, `K6_BURST_DURATION`, `K6_BURST_MIN_WALLETS`, `API_URL`, `HMAC_SECRET`.
+
+### Why two profiles?
+
+- **Smoke** does not prove “thousands of concurrent users.” It uses ~60 peak VUs, ~21 wallets, and **100 ms sleep** between iterations — so throughput (~310 req/s) is an **artificially paced** health check, not a player model.
+- **Burst** targets **250 req/s** with k6 `constant-arrival-rate` (no sleep). That number is a **5× headroom** planning figure on ~50 req/s steady-state for ~1000 slot players (~20 s between spins), not “1000 connections.”
+- Production pool sizing: `PgBouncer backends ≈ peak_RPS × avg_DB_transaction_seconds × (1 + headroom)`, validated with pool-wait and lock-wait metrics — not `concurrent_users = pool_size`.
+
+### Results — smoke (Docker Compose stack, MacBook Pro M3, 2025-05-22)
 
 | Metric | Value | Threshold |
 |--------|-------|-----------|
@@ -227,20 +248,33 @@ Thresholds: p95 < 500ms, error rate < 5%. Optional: `K6_WALLETS=20` when seeding
 | Error rate | **0.00%** | < 5% ✅ |
 | Checks passed | 18,647 / 18,647 (100%) | — |
 
-**Scenarios (60 s total):**
+**Scenarios (60 s):** `balance` 10 VUs × 30 s; `bet_win` ramp 0→20→50→0 over 60 s. **bet_latency** p95 ~16 ms.
 
-| Scenario | VUs | Duration | Iterations |
-|----------|-----|----------|------------|
-| `balance` — balance-only lookup | 10 constant | 30 s | ~3,100 |
-| `bet_win` — atomic bet+win | 0 → 20 → 50 → 0 ramping | 60 s | ~15,550 |
+### Results — burst (local: Postgres Docker + single API `pnpm dev`, 501 wallets, 2026-05-26)
 
-**Custom bet latency metric** (client-side, includes network round-trip):
+| Metric | Value | Threshold |
+|--------|-------|-----------|
+| Target / achieved throughput | **250 req/s** | ~**250 req/s** ✅ |
+| Total iterations | 45,001 | 3 min |
+| `http_req_duration` p95 | **19.93 ms** | < 500 ms ✅ |
+| `http_req_duration` avg | 11.55 ms | — |
+| `http_req_duration` max | 117.5 ms | — |
+| **bet_latency** p95 (75% of traffic) | **22 ms** | — |
+| Error rate | **0.00%** | < 5% ✅ |
+| k6 VUs used | 0–8 of 80 pre-allocated | API not saturated |
 
-| avg | med | p90 | p95 | max |
-|-----|-----|-----|-----|-----|
-| 9.4 ms | 8 ms | 14 ms | 16 ms | 62 ms |
+**Burst scenario:** 250 iterations/s for 3m, **25%** balance-only / **75%** bet+win, random wallet per request across **501** funded wallets, no inter-iteration sleep.
 
-All HMAC-signed `process` calls. Bet+win batches run atomically (single DB transaction with row-level wallet lock). p95 is **32× under** the 500 ms threshold.
+**Pool-sizing back-of-envelope from this run:**
+
+\[
+250\ \text{RPS} \times 0.012\ \text{s (avg HTTP)} \approx 3\ \text{concurrent slots},\quad
+250 \times 0.020 \approx 5\ \text{ at p95}
+\]
+
+So **~20** app/PgBouncer backends was ample here; production would still measure under real network latency, multi-pod API, and PgBouncer queue metrics before committing to a number.
+
+**Caveats:** Single API process, direct `DATABASE_URL` to Postgres (not full Compose API→PgBouncer path). Staging should repeat burst against the production-shaped stack and watch `cl_waiting` / lock wait before sizing pools for deploy.
 
 ## Scale Design (Billions of Rows)
 

@@ -330,10 +330,10 @@ Re-run integration tests; add case for **J** if not covered.
 **`k6/process-load.js`:**
 
 - `setup()`: create DB wallets or call seed endpoint
-- Scenarios: balance, bet/win, duplicates
+- Profiles: `smoke` (default, VU ramp + sleep) and `burst` (`K6_PROFILE=burst`, 250 iters/s, 500+ wallets, no sleep)
 - Thresholds: p95 < 500ms initially
 
-**Verify:** `pnpm load:k6` against compose.
+**Verify:** `pnpm load:k6` (smoke), `K6_WALLETS=500 pnpm db:seed && pnpm load:k6:burst` (capacity signal).
 
 ---
 

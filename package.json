@@ -22,7 +22,9 @@
     "simulate:events": "tsx --tsconfig tsconfig.tools.json tools/event-simulator.ts",
     "simulate:rtp": "tsx --tsconfig tsconfig.tools.json tools/rtp-game-runner.ts",
     "load:k6": "k6 run k6/process-load.js",
+    "load:k6:burst": "K6_PROFILE=burst k6 run k6/process-load.js",
     "load:k6:docker": "docker run --rm -v \"$(pwd)/k6:/scripts\" -e API_URL=${API_URL:-http://host.docker.internal:3000} -e HMAC_SECRET=${HMAC_SECRET:-test} grafana/k6:latest run /scripts/process-load.js",
+    "load:k6:burst:docker": "docker run --rm -v \"$(pwd)/k6:/scripts\" -e K6_PROFILE=burst -e API_URL=${API_URL:-http://host.docker.internal:3000} -e HMAC_SECRET=${HMAC_SECRET:-test} grafana/k6:latest run /scripts/process-load.js",
     "lint": "eslint src tests tools",
     "format": "prettier --write ."
   },
