@@ -8,5 +8,5 @@
       "@tools/*": ["tools/*"]
     }
   },
-  "include": ["tools/**/*", "src/schemas/**/*"]
+  "include": ["tools/**/*", "src/**/*"]
 }

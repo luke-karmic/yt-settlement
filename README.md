@@ -194,6 +194,33 @@ Win distribution: 50% loss, 45% win×1.45, 5% jackpot×6
 Expected RTP: ≈ 95.25% — verified against casino RTP endpoint.  
 Tolerance: ±2% (at 10,000 rounds; ±1% at 100,000+ rounds).
 
+## Balance reconciliation (ledger replay)
+
+Replays every `ledger_actions` row for a wallet in order (`balance_before` → `balance_after` chain) and compares the final balance to `wallets.balance`.
+
+```bash
+# All wallets
+pnpm reconcile
+
+# One wallet
+pnpm reconcile -- --user-id "8|USDT|USD" --currency USD
+pnpm reconcile -- --wallet-id 1
+
+# JSON + non-zero exit on drift/chain break (default)
+pnpm reconcile -- --json
+
+# Report only (always exit 0)
+pnpm reconcile -- --no-strict
+```
+
+Output includes row counts, per-action-type/status counts, `sum_delta`, `expected_balance`, `wallet_balance`, and `drift`.
+
+**Negative test:** corrupt a wallet without touching the ledger, then re-run:
+
+```sql
+UPDATE wallets SET balance = balance + 500 WHERE provider_user_id = '8|USDT|USD';
+```
+
 ## k6 Load Test
 
 HMAC-signed `process` traffic: balance-only lookups and atomic bet+win batches. Two profiles in `k6/process-load.js`:

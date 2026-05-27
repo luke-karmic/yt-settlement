@@ -341,7 +341,11 @@ Re-run integration tests; add case for **J** if not covered.
 
 **`src/workers/ledger-integrity.ts`:** scan recent partition, verify hashes, log alert.
 
-**`src/workers/sliding-reconciliation.ts`:** replay 1h window vs wallets.balance.
+**`src/services/ledger-reconciliation.ts`:** full ledger replay per wallet; compare last `balance_after` chain to `wallets.balance`.
+
+**`tools/reconcile-balances.ts`:** CLI (`pnpm reconcile`) — structured logs, `--json`, exit 1 on drift/chain break.
+
+**`src/workers/sliding-reconciliation.ts`:** calls `reconcileAllWallets()` and logs errors (alert only).
 
 Docker profile `ops` optional.
 

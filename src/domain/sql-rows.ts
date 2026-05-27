@@ -83,6 +83,25 @@ export const countRowSchema = z.object({
   total: numericSchema,
 });
 
+/** Zod shape for wallet rows loaded by ledger reconciliation. */
+export const reconcileWalletRowSchema = z.object({
+  id: numericSchema,
+  provider_user_id: z.string(),
+  currency: z.string(),
+  balance: numericSchema,
+});
+
+/** Zod shape for ledger rows replayed during reconciliation. */
+export const reconcileLedgerRowSchema = z.object({
+  id: numericSchema,
+  action_type: z.number().int(),
+  status: z.number().int(),
+  amount: numericSchema,
+  balance_before: numericSchema,
+  balance_after: numericSchema,
+  created_at: z.union([z.string(), z.date()]),
+});
+
 /**
  * @param value - Numeric column from Postgres (`bigint`, `numeric`, or string)
  * @returns JavaScript `bigint`
@@ -208,6 +227,62 @@ export function parseWalletBalance(rows: readonly unknown[]): Balance {
  */
 export function parseLedgerId(rows: readonly unknown[]): LedgerId {
   return toLedgerId(toBigInt(parseFirstRow(ledgerIdRowSchema, rows).id));
+}
+
+/**
+ * Parsed wallet row for reconciliation queries (`wallets` projection).
+ */
+export interface ReconcileWalletRow {
+  id: WalletId;
+  providerUserId: string;
+  currency: string;
+  balance: Balance;
+}
+
+/**
+ * Parsed ledger row for full-wallet replay (`ledger_actions`, time-ordered).
+ */
+export interface ReconcileLedgerRow {
+  id: LedgerId;
+  actionType: number;
+  status: number;
+  amount: Balance;
+  balanceBefore: Balance;
+  balanceAfter: Balance;
+  createdAt: Date | string;
+}
+
+/**
+ * @param row - Raw SQL wallet row
+ * @returns Parsed reconciliation wallet fields
+ */
+export function parseReconcileWalletRow(row: unknown): ReconcileWalletRow {
+  const parsed = reconcileWalletRowSchema.parse(row);
+  return {
+    id: toWalletId(toBigInt(parsed.id)),
+    providerUserId: parsed.provider_user_id,
+    currency: parsed.currency,
+    balance: toBalance(toBigInt(parsed.balance)),
+  };
+}
+
+/**
+ * @param rows - Raw SQL ledger rows ordered for replay
+ * @returns Parsed ledger rows for reconciliation
+ */
+export function parseReconcileLedgerRows(rows: readonly unknown[]): ReconcileLedgerRow[] {
+  return rows.map((row) => {
+    const parsed = reconcileLedgerRowSchema.parse(row);
+    return {
+      id: toLedgerId(toBigInt(parsed.id)),
+      actionType: parsed.action_type,
+      status: parsed.status,
+      amount: toBalance(toBigInt(parsed.amount)),
+      balanceBefore: toBalance(toBigInt(parsed.balance_before)),
+      balanceAfter: toBalance(toBigInt(parsed.balance_after)),
+      createdAt: parsed.created_at,
+    };
+  });
 }
 
 /**
